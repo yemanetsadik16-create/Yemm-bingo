@@ -49,7 +49,11 @@ class FirestoreBingoRepository(
      */
     suspend fun signInWithGoogle(activityContext: Context): Result<UserProfile> {
         return try {
-            val webClientId = context.getString(R.string.default_web_client_id)
+            val webClientId = try {
+                context.getString(R.string.default_web_client_id)
+            } catch (e: Exception) {
+                "108825468223-69fijp6luf8djgkl2nntgcser1vsfff6.apps.googleusercontent.com"
+            }
             val credentialManager = CredentialManager.create(activityContext)
 
             val signInOption = GetSignInWithGoogleOption.Builder(webClientId)
