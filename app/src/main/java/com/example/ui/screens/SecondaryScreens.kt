@@ -278,7 +278,7 @@ fun AdminScreen(
                     OutlinedTextField(
                         value = adminPass,
                         onValueChange = { adminPass = it },
-                        label = { Text("Enter Admin Password (admin)") },
+                        label = { Text("Enter Admin Password") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),

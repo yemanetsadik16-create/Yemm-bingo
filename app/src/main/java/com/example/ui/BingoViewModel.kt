@@ -698,7 +698,7 @@ class BingoViewModel(application: Application) : AndroidViewModel(application) {
     // --- Admin Operations ---
     fun adminLogin(pass: String): Boolean {
         // Admin credentials
-        if (pass == "admin" || pass == "admin123" || pass == "123456") {
+        if (pass == "yemane21@") {
             _uiState.update { it.copy(isAdminLoggedIn = true, currentScreen = Screen.Admin) }
             showToast("Admin access granted")
             return true

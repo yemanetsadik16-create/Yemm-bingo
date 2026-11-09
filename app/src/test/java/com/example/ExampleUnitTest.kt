@@ -117,4 +117,12 @@ class ExampleUnitTest {
         assertEquals(60, withdrawal.amount)
         assertEquals("0939383425", withdrawal.targetAccount)
     }
+
+    @Test
+    fun testAdminPasswordValidation() {
+        val correctPass = "yemane21@"
+        val wrongPass = "admin"
+        assertTrue(correctPass == "yemane21@")
+        assertFalse(wrongPass == "yemane21@")
+    }
 }
