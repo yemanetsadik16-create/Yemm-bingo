@@ -1,0 +1,6 @@
+{
+  "name": "Yeme Bingo",
+  "description": "Multiplayer Ethiopian & Global Bingo game with live scheduled rounds, voice callouts, cartela boards, and Telebirr wallet.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

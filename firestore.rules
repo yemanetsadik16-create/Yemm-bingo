@@ -1,0 +1,158 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.matches('^[a-zA-Z0-9_\\-]+$') && id.size() > 0 && id.size() <= 128;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string &&
+             data.username is string && data.username.size() >= 2 && data.username.size() <= 40 &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 20)) &&
+             (!('playingTime' in data) || (data.playingTime is string && data.playingTime.size() <= 50)) &&
+             data.wallet is int && data.wallet >= 0 &&
+             (!('ownedCardSeeds' in data) || data.ownedCardSeeds is map);
+    }
+
+    function isValidDeposit(data) {
+      return data.depositId is string &&
+             data.userId is string &&
+             data.username is string &&
+             data.amount is int && data.amount > 0 &&
+             data.paymentMethod in ['telebirr', 'cbe', 'cbe_birr', 'ebirr'] &&
+             data.receiptId is string && data.receiptId.size() > 0 && data.receiptId.size() <= 120 &&
+             (!('fullReceipt' in data) || (data.fullReceipt is string && data.fullReceipt.size() <= 1000)) &&
+             data.status in ['pending', 'approved', 'declined'];
+    }
+
+    function isValidWithdrawal(data) {
+      return data.withdrawId is string &&
+             data.userId is string &&
+             data.username is string &&
+             data.amount is int && data.amount > 0 &&
+             data.paymentMethod in ['telebirr', 'cbe', 'cbe_birr', 'ebirr'] &&
+             data.targetAccount is string && data.targetAccount.size() > 0 && data.targetAccount.size() <= 40 &&
+             data.status in ['pending', 'approved', 'declined'];
+    }
+
+    function isValidWinner(data) {
+      return data.winnerId is string &&
+             data.userId is string &&
+             data.username is string &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 20)) &&
+             (!('gameTime' in data) || (data.gameTime is string && data.gameTime.size() <= 50)) &&
+             (!('roundIndex' in data) || data.roundIndex is int) &&
+             data.rewardBirr is int && data.rewardBirr >= 0 &&
+             data.cardNumber is int &&
+             data.callsCount is int;
+    }
+
+    function isValidGameRoom(data) {
+      return data.roomId is string &&
+             (!('slot' in data) || (data.slot is string && data.slot.size() <= 50)) &&
+             (!('round' in data) || data.round is int) &&
+             data.status in ['waiting', 'playing', 'finished'] &&
+             (!('calledNumbers' in data) || (data.calledNumbers is list && data.calledNumbers.size() <= 75)) &&
+             (!('winnerName' in data) || (data.winnerName is string && data.winnerName.size() <= 40)) &&
+             (!('winnerCardNumber' in data) || data.winnerCardNumber is int) &&
+             data.prizePool is int && data.prizePool >= 0;
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      allow create: if isOwner(userId) && isValidId(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isOwner(userId) && isValidId(userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserProfile(incoming());
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+    }
+
+    // --- Deposits Collection ---
+    match /deposits/{depositId} {
+      allow get: if isSignedIn() && isValidId(depositId) && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      allow create: if isSignedIn() && isValidId(depositId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       isValidDeposit(incoming());
+
+      allow update: if isSignedIn() && isValidId(depositId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidDeposit(incoming());
+
+      allow delete: if false;
+    }
+
+    // --- Withdrawals Collection ---
+    match /withdrawals/{withdrawId} {
+      allow get: if isSignedIn() && isValidId(withdrawId) && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      allow create: if isSignedIn() && isValidId(withdrawId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       isValidWithdrawal(incoming());
+
+      allow update: if isSignedIn() && isValidId(withdrawId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidWithdrawal(incoming());
+
+      allow delete: if false;
+    }
+
+    // --- Winners History Collection ---
+    match /winners/{winnerId} {
+      allow get, list: if isSignedIn();
+
+      allow create: if isSignedIn() && isValidId(winnerId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       isValidWinner(incoming());
+
+      allow update, delete: if false;
+    }
+
+    // --- Multiplayer Game Rooms Collection ---
+    match /game_rooms/{roomId} {
+      allow get, list: if isSignedIn();
+
+      allow create: if isSignedIn() && isValidId(roomId) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       isValidGameRoom(incoming());
+
+      allow update: if isSignedIn() && isValidId(roomId) &&
+                       isValidGameRoom(incoming());
+
+      allow delete: if false;
+    }
+  }
+}

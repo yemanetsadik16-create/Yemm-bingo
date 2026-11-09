@@ -1,0 +1,37 @@
+# Built application files
+*.apk
+*.aar
+*.aab
+
+# Gradle caches & build outputs
+.gradle/
+build/
+app/build/
+.build-outputs/
+
+# Local & environment configuration
+local.properties
+.env
+.env.local
+
+# Signing keys & credentials
+*.jks
+*.keystore
+debug.keystore
+
+# Android Studio & IntelliJ IDEA
+*.iml
+.idea/
+.kotlin/
+/captures
+.externalNativeBuild
+.cxx
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+
+# Firebase emulator logs
+*-debug.log
+firebase-debug.log
+firestore-debug.log

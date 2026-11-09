@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with Ethiopian bingo account details, wallet, and registered playing time.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated user UID" },
+        "username": { "type": "string", "description": "Display nickname or username" },
+        "phone": { "type": "string", "description": "Ethiopian phone number (e.g. 0939383425)" },
+        "playingTime": { "type": "string", "description": "Preferred game slot label" },
+        "wallet": { "type": "integer", "description": "Wallet balance in Ethiopian Birr" },
+        "ownedCardSeeds": { "type": "object", "description": "Map of reserved slot card seeds" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp via serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp via serverTimestamp()" }
+      },
+      "required": ["userId", "username", "wallet", "createdAt"]
+    },
+    "DepositRequest": {
+      "title": "DepositRequest",
+      "description": "Deposit transaction via Telebirr, CBE, CBE Birr, or E-Birr.",
+      "type": "object",
+      "properties": {
+        "depositId": { "type": "string", "description": "Unique deposit reference ID" },
+        "userId": { "type": "string", "description": "UID of depositor" },
+        "username": { "type": "string", "description": "Username of depositor" },
+        "amount": { "type": "integer", "description": "Deposit amount in Birr" },
+        "paymentMethod": { "type": "string", "description": "Payment provider (telebirr, cbe, cbe_birr, ebirr)" },
+        "receiptId": { "type": "string", "description": "Transaction ID or confirmation code" },
+        "fullReceipt": { "type": "string", "description": "Receipt details or link" },
+        "status": { "type": "string", "enum": ["pending", "approved", "declined"], "description": "Approval status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Submission timestamp" }
+      },
+      "required": ["depositId", "userId", "username", "amount", "paymentMethod", "receiptId", "status", "createdAt"]
+    },
+    "WithdrawalRequest": {
+      "title": "WithdrawalRequest",
+      "description": "Withdrawal request payout to user account.",
+      "type": "object",
+      "properties": {
+        "withdrawId": { "type": "string", "description": "Unique withdrawal request ID" },
+        "userId": { "type": "string", "description": "UID of requester" },
+        "username": { "type": "string", "description": "Username of requester" },
+        "amount": { "type": "integer", "description": "Withdrawal amount in Birr" },
+        "paymentMethod": { "type": "string", "description": "Payment provider (telebirr, cbe, cbe_birr, ebirr)" },
+        "targetAccount": { "type": "string", "description": "Phone number or account to receive funds" },
+        "status": { "type": "string", "enum": ["pending", "approved", "declined"], "description": "Processing status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Submission timestamp" }
+      },
+      "required": ["withdrawId", "userId", "username", "amount", "paymentMethod", "targetAccount", "status", "createdAt"]
+    },
+    "WinnerRecord": {
+      "title": "WinnerRecord",
+      "description": "Historical record of game winners.",
+      "type": "object",
+      "properties": {
+        "winnerId": { "type": "string", "description": "Unique winner entry ID" },
+        "userId": { "type": "string", "description": "Winner user ID" },
+        "username": { "type": "string", "description": "Winner display name" },
+        "phone": { "type": "string", "description": "Winner phone number" },
+        "gameTime": { "type": "string", "description": "Slot identifier" },
+        "roundIndex": { "type": "integer", "description": "Round number in slot" },
+        "rewardBirr": { "type": "integer", "description": "Birr amount awarded" },
+        "cardNumber": { "type": "integer", "description": "Winning card number" },
+        "callsCount": { "type": "integer", "description": "Total calls before bingo win" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp recorded" }
+      },
+      "required": ["winnerId", "userId", "username", "rewardBirr", "cardNumber", "callsCount", "createdAt"]
+    },
+    "GameRoom": {
+      "title": "GameRoom",
+      "description": "Multiplayer live bingo room state and called numbers.",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string", "description": "Room identifier, e.g. active_room or slot_id" },
+        "slot": { "type": "string", "description": "Slot label" },
+        "round": { "type": "integer", "description": "Current round number" },
+        "status": { "type": "string", "enum": ["waiting", "playing", "finished"], "description": "Room state" },
+        "calledNumbers": { "type": "array", "description": "List of called bingo numbers 1..75" },
+        "winnerName": { "type": "string", "description": "Winner username if game finished" },
+        "winnerCardNumber": { "type": "integer", "description": "Winner card index" },
+        "prizePool": { "type": "integer", "description": "Total prize pool Birr" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Room start timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last number call timestamp" }
+      },
+      "required": ["roomId", "status", "prizePool", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile, credentials, and wallet balance."
+    },
+    "/deposits/{depositId}": {
+      "schema": "DepositRequest",
+      "description": "User deposit requests with payment proofs."
+    },
+    "/withdrawals/{withdrawId}": {
+      "schema": "WithdrawalRequest",
+      "description": "User withdrawal payout requests."
+    },
+    "/winners/{winnerId}": {
+      "schema": "WinnerRecord",
+      "description": "Public winner history."
+    },
+    "/game_rooms/{roomId}": {
+      "schema": "GameRoom",
+      "description": "Synchronized multiplayer bingo room."
+    }
+  }
+}

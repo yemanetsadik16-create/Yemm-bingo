@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "108825468223",
+    "project_id": "gen-lang-client-0771751827",
+    "storage_bucket": "gen-lang-client-0771751827.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:108825468223:android:13d4a8df949a0e8eb2c78a",
+        "android_client_info": {
+          "package_name": "com.aistudio.yemebingo.xkrpqt"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "108825468223-ugsu320952n71pf67mpc496v09hbgmhk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.yemebingo.xkrpqt",
+            "certificate_hash": "3a244bfad8df15a8c229529c8d9f101b776072f9"
+          }
+        },
+        {
+          "client_id": "108825468223-69fijp6luf8djgkl2nntgcser1vsfff6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBnPOuIkN5M0LfojMOtoK5f_wYkAHtS4mI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "108825468223-69fijp6luf8djgkl2nntgcser1vsfff6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
