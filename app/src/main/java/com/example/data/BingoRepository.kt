@@ -33,8 +33,12 @@ class BingoRepository(context: Context) {
     }
 
     init {
-        // Ensure all legacy demo accounts are purged so only accounts registered on the server exist
-        purgeDemoAccounts()
+        // Ensure all legacy demo accounts are purged safely
+        try {
+            purgeDemoAccounts()
+        } catch (e: Exception) {
+            android.util.Log.e("BingoRepository", "Error in purgeDemoAccounts", e)
+        }
     }
 
     private fun purgeDemoAccounts() {
@@ -61,7 +65,11 @@ class BingoRepository(context: Context) {
 
     // --- Current Active User Session ---
     fun getCurrentUser(): String? {
-        return prefs.getString(KEY_CURRENT_USER, null)
+        return try {
+            prefs.getString(KEY_CURRENT_USER, null)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun setCurrentUser(username: String?) {
@@ -325,18 +333,18 @@ class BingoRepository(context: Context) {
     }
 
     // --- Settings Preferences ---
-    fun getLanguage(): String = prefs.getString(KEY_LANGUAGE, "en") ?: "en"
-    fun setLanguage(lang: String) = prefs.edit().putString(KEY_LANGUAGE, lang).apply()
+    fun getLanguage(): String = try { prefs.getString(KEY_LANGUAGE, "en") ?: "en" } catch (_: Exception) { "en" }
+    fun setLanguage(lang: String) = try { prefs.edit().putString(KEY_LANGUAGE, lang).apply() } catch (_: Exception) {}
 
-    fun isSoundEnabled(): Boolean = prefs.getBoolean(KEY_SOUND_ENABLED, true)
-    fun setSoundEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_SOUND_ENABLED, enabled).apply()
+    fun isSoundEnabled(): Boolean = try { prefs.getBoolean(KEY_SOUND_ENABLED, true) } catch (_: Exception) { true }
+    fun setSoundEnabled(enabled: Boolean) = try { prefs.edit().putBoolean(KEY_SOUND_ENABLED, enabled).apply() } catch (_: Exception) {}
 
-    fun isAutoMarkEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_MARK, false)
-    fun setAutoMarkEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_AUTO_MARK, enabled).apply()
+    fun isAutoMarkEnabled(): Boolean = try { prefs.getBoolean(KEY_AUTO_MARK, false) } catch (_: Exception) { false }
+    fun setAutoMarkEnabled(enabled: Boolean) = try { prefs.edit().putBoolean(KEY_AUTO_MARK, enabled).apply() } catch (_: Exception) {}
 
-    fun getCallerSpeed(): Float = prefs.getFloat(KEY_CALLER_SPEED, 1.15f)
-    fun setCallerSpeed(speed: Float) = prefs.edit().putFloat(KEY_CALLER_SPEED, speed).apply()
+    fun getCallerSpeed(): Float = try { prefs.getFloat(KEY_CALLER_SPEED, 1.15f) } catch (_: Exception) { 1.15f }
+    fun setCallerSpeed(speed: Float) = try { prefs.edit().putFloat(KEY_CALLER_SPEED, speed).apply() } catch (_: Exception) {}
 
-    fun getCallerPitch(): Float = prefs.getFloat(KEY_CALLER_PITCH, 0.98f)
-    fun setCallerPitch(pitch: Float) = prefs.edit().putFloat(KEY_CALLER_PITCH, pitch).apply()
+    fun getCallerPitch(): Float = try { prefs.getFloat(KEY_CALLER_PITCH, 0.98f) } catch (_: Exception) { 0.98f }
+    fun setCallerPitch(pitch: Float) = try { prefs.edit().putFloat(KEY_CALLER_PITCH, pitch).apply() } catch (_: Exception) {}
 }

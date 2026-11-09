@@ -109,40 +109,49 @@ class BingoViewModel(application: Application) : AndroidViewModel(application) {
     private var liveGameJob: Job? = null
 
     init {
-        val savedLang = when (repository.getLanguage()) {
-            "am" -> AppLanguage.AM
-            "ti" -> AppLanguage.TI
-            else -> AppLanguage.EN
+        try {
+            val savedLang = when (repository.getLanguage()) {
+                "am" -> AppLanguage.AM
+                "ti" -> AppLanguage.TI
+                else -> AppLanguage.EN
+            }
+            val currentUsername = repository.getCurrentUser()
+            val userProfile = currentUsername?.let { repository.getUserProfile(it) }
+
+            val savedSpeed = repository.getCallerSpeed()
+            val savedPitch = repository.getCallerPitch()
+            soundManager.setCallerSpeed(savedSpeed)
+            soundManager.setCallerPitch(savedPitch)
+
+            val firebaseUser = firestoreRepo.currentFirebaseUser
+            if (firebaseUser != null) {
+                attachFirestoreUserListener(firebaseUser.uid)
+            }
+
+            _uiState.update {
+                it.copy(
+                    language = savedLang,
+                    currentUser = userProfile,
+                    soundEnabled = repository.isSoundEnabled(),
+                    autoMarkEnabled = repository.isAutoMarkEnabled(),
+                    callerSpeed = savedSpeed,
+                    callerPitch = savedPitch,
+                    deposits = repository.getDeposits(),
+                    withdrawals = repository.getWithdrawals(),
+                    allUsers = repository.getAllUsers().values.toList(),
+                    recentWinners = repository.getWinners(),
+                    isFirebaseConnected = firestoreRepo.isAvailable
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("BingoViewModel", "Error initializing ViewModel state safely", e)
         }
-        val currentUsername = repository.getCurrentUser()
-        val userProfile = currentUsername?.let { repository.getUserProfile(it) }
 
-        val savedSpeed = repository.getCallerSpeed()
-        val savedPitch = repository.getCallerPitch()
-        soundManager.setCallerSpeed(savedSpeed)
-        soundManager.setCallerPitch(savedPitch)
-
-        val firebaseUser = firestoreRepo.currentFirebaseUser
-        if (firebaseUser != null) {
-            attachFirestoreUserListener(firebaseUser.uid)
+        try {
+            startCountdownTimer()
+        } catch (e: Exception) {
+            android.util.Log.e("BingoViewModel", "Error starting timer", e)
         }
-
-        _uiState.update {
-            it.copy(
-                language = savedLang,
-                currentUser = userProfile,
-                soundEnabled = repository.isSoundEnabled(),
-                autoMarkEnabled = repository.isAutoMarkEnabled(),
-                callerSpeed = savedSpeed,
-                callerPitch = savedPitch,
-                deposits = repository.getDeposits(),
-                withdrawals = repository.getWithdrawals(),
-                allUsers = repository.getAllUsers().values.toList(),
-                recentWinners = repository.getWinners()
-            )
-        }
-
-        startCountdownTimer()
     }
 
     fun navigateTo(screen: Screen) {

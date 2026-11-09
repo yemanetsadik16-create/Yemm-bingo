@@ -38,7 +38,12 @@ import kotlin.math.sin
  */
 class BingoSoundManager(private val context: Context) : TextToSpeech.OnInitListener {
 
-    private var tts: TextToSpeech? = TextToSpeech(context, this)
+    private var tts: TextToSpeech? = try {
+        TextToSpeech(context.applicationContext, this)
+    } catch (e: Exception) {
+        android.util.Log.e("BingoSoundManager", "TextToSpeech init safely skipped", e)
+        null
+    }
     private var isTtsReady = false
     private var isDeviceAmharicSupported = false
     private var mediaPlayer: MediaPlayer? = null
@@ -46,16 +51,24 @@ class BingoSoundManager(private val context: Context) : TextToSpeech.OnInitListe
     private var callerPitch: Float = 0.98f // Crisp, resonant, clear male voice
     private var callerSpeed: Float = 1.15f // Fast, clear, snappy caller pace
 
-    private val cacheDir = File(context.cacheDir, "amharic_male_calls_fast_v4").apply {
-        if (!exists()) mkdirs()
+    private val cacheDir = try {
+        File(context.cacheDir, "amharic_male_calls_fast_v4").apply {
+            if (!exists()) mkdirs()
+        }
+    } catch (_: Exception) {
+        null
     }
 
-    private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-        manager?.defaultVibrator
-    } else {
-        @Suppress("DEPRECATION")
-        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+    private val vibrator: Vibrator? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            manager?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+    } catch (_: Exception) {
+        null
     }
 
     override fun onInit(status: Int) {

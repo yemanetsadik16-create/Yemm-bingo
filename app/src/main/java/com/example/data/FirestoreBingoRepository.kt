@@ -6,16 +6,15 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.CustomCredential
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.GetCredentialException
 import com.example.R
 import com.example.model.DepositRequest
-import com.example.model.PaymentMethod
 import com.example.model.UserProfile
 import com.example.model.WinHistoryRecord
 import com.example.model.WithdrawalRequest
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
@@ -28,30 +27,55 @@ import kotlinx.coroutines.tasks.await
 
 class FirestoreBingoRepository(
     private val context: Context,
-    val db: FirebaseFirestore,
-    val auth: FirebaseAuth = Firebase.auth
+    val db: FirebaseFirestore?,
+    val auth: FirebaseAuth?
 ) {
     companion object {
         private const val TAG = "FirestoreBingoRepo"
 
         fun create(context: Context): FirestoreBingoRepository {
-            val databaseId = context.getString(R.string.firestore_database_id)
-            val firestore = FirebaseFirestore.getInstance(databaseId)
-            return FirestoreBingoRepository(context.applicationContext, firestore)
+            return try {
+                if (FirebaseApp.getApps(context).isEmpty()) {
+                    FirebaseApp.initializeApp(context)
+                }
+                val databaseId = try {
+                    context.getString(R.string.firestore_database_id)
+                } catch (_: Exception) {
+                    null
+                }
+                val firestore = if (!databaseId.isNullOrBlank()) {
+                    FirebaseFirestore.getInstance(databaseId)
+                } else {
+                    FirebaseFirestore.getInstance()
+                }
+                val auth = Firebase.auth
+                FirestoreBingoRepository(context.applicationContext, firestore, auth)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize Firebase services. Running in safe local mode.", e)
+                FirestoreBingoRepository(context.applicationContext, null, null)
+            }
         }
     }
 
+    val isAvailable: Boolean
+        get() = db != null && auth != null
+
     val currentFirebaseUser: FirebaseUser?
-        get() = auth.currentUser
+        get() = auth?.currentUser
 
     /**
      * Interactive Google Sign-In via Credential Manager.
      */
     suspend fun signInWithGoogle(activityContext: Context): Result<UserProfile> {
+        val currentAuth = auth
+        if (currentAuth == null) {
+            return Result.failure(IllegalStateException("Firebase Auth is not available on this device"))
+        }
+
         return try {
             val webClientId = try {
                 context.getString(R.string.default_web_client_id)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 "108825468223-69fijp6luf8djgkl2nntgcser1vsfff6.apps.googleusercontent.com"
             }
             val credentialManager = CredentialManager.create(activityContext)
@@ -74,7 +98,7 @@ class FirestoreBingoRepository(
             ) {
                 val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
                 val idToken = googleIdTokenCredential.idToken
-                val authResult = auth.signInWithCredential(
+                val authResult = currentAuth.signInWithCredential(
                     GoogleAuthProvider.getCredential(idToken, null)
                 ).await()
 
@@ -100,7 +124,11 @@ class FirestoreBingoRepository(
     }
 
     fun signOut() {
-        auth.signOut()
+        try {
+            auth?.signOut()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sign out", e)
+        }
     }
 
     /**
@@ -111,33 +139,53 @@ class FirestoreBingoRepository(
         fallbackName: String,
         fallbackPhone: String
     ): UserProfile {
-        val userDoc = db.collection("users").document(userId).get().await()
-        if (userDoc.exists()) {
-            val username = userDoc.getString("username") ?: fallbackName
-            val phone = userDoc.getString("phone") ?: fallbackPhone
-            val playingTime = userDoc.getString("playingTime") ?: "8:00 O’clock Day"
-            val wallet = (userDoc.getLong("wallet") ?: 150L).toInt()
-            val seedsRaw = userDoc.get("ownedCardSeeds") as? Map<*, *>
-            val seeds = seedsRaw?.mapNotNull { (k, v) ->
-                if (k is String && v is Number) k to v.toLong() else null
-            }?.toMap() ?: emptyMap()
-
+        val firestore = db
+        if (firestore == null) {
             return UserProfile(
-                username = username,
-                phone = phone,
-                playingTime = playingTime,
-                wallet = wallet,
-                ownedCardSeeds = seeds
-            )
-        } else {
-            val newProfile = UserProfile(
                 username = fallbackName,
                 phone = fallbackPhone,
                 playingTime = "8:00 O’clock Day",
                 wallet = 150
             )
-            saveUserProfile(userId, newProfile)
-            return newProfile
+        }
+
+        return try {
+            val userDoc = firestore.collection("users").document(userId).get().await()
+            if (userDoc.exists()) {
+                val username = userDoc.getString("username") ?: fallbackName
+                val phone = userDoc.getString("phone") ?: fallbackPhone
+                val playingTime = userDoc.getString("playingTime") ?: "8:00 O’clock Day"
+                val wallet = (userDoc.getLong("wallet") ?: 150L).toInt()
+                val seedsRaw = userDoc.get("ownedCardSeeds") as? Map<*, *>
+                val seeds = seedsRaw?.mapNotNull { (k, v) ->
+                    if (k is String && v is Number) k to v.toLong() else null
+                }?.toMap() ?: emptyMap()
+
+                UserProfile(
+                    username = username,
+                    phone = phone,
+                    playingTime = playingTime,
+                    wallet = wallet,
+                    ownedCardSeeds = seeds
+                )
+            } else {
+                val newProfile = UserProfile(
+                    username = fallbackName,
+                    phone = fallbackPhone,
+                    playingTime = "8:00 O’clock Day",
+                    wallet = 150
+                )
+                saveUserProfile(userId, newProfile)
+                newProfile
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading user profile", e)
+            UserProfile(
+                username = fallbackName,
+                phone = fallbackPhone,
+                playingTime = "8:00 O’clock Day",
+                wallet = 150
+            )
         }
     }
 
@@ -145,23 +193,28 @@ class FirestoreBingoRepository(
      * Upsert user profile to Firestore `users/{userId}`.
      */
     suspend fun saveUserProfile(userId: String, profile: UserProfile) {
-        val data = hashMapOf<String, Any>(
-            "userId" to userId,
-            "username" to profile.username,
-            "phone" to profile.phone,
-            "playingTime" to profile.playingTime,
-            "wallet" to profile.wallet,
-            "ownedCardSeeds" to profile.ownedCardSeeds,
-            "updatedAt" to FieldValue.serverTimestamp()
-        )
+        val firestore = db ?: return
+        try {
+            val data = hashMapOf<String, Any>(
+                "userId" to userId,
+                "username" to profile.username,
+                "phone" to profile.phone,
+                "playingTime" to profile.playingTime,
+                "wallet" to profile.wallet,
+                "ownedCardSeeds" to profile.ownedCardSeeds,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
 
-        val docRef = db.collection("users").document(userId)
-        val doc = docRef.get().await()
-        if (!doc.exists()) {
-            data["createdAt"] = FieldValue.serverTimestamp()
-            docRef.set(data).await()
-        } else {
-            docRef.set(data, SetOptions.merge()).await()
+            val docRef = firestore.collection("users").document(userId)
+            val doc = docRef.get().await()
+            if (!doc.exists()) {
+                data["createdAt"] = FieldValue.serverTimestamp()
+                docRef.set(data).await()
+            } else {
+                docRef.set(data, SetOptions.merge()).await()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving user profile", e)
         }
     }
 
@@ -169,7 +222,8 @@ class FirestoreBingoRepository(
      * Real-time listener for current user document.
      */
     fun observeUserProfile(userId: String, onUpdate: (UserProfile) -> Unit): ListenerRegistration {
-        return db.collection("users").document(userId)
+        val firestore = db ?: return ListenerRegistration { }
+        return firestore.collection("users").document(userId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w(TAG, "Error observing user profile: ${error.message}")
@@ -202,57 +256,72 @@ class FirestoreBingoRepository(
      * Save deposit to Firestore `deposits/{depositId}`.
      */
     suspend fun addDeposit(deposit: DepositRequest) {
-        val uid = auth.currentUser?.uid ?: return
-        val docData = hashMapOf(
-            "depositId" to deposit.id,
-            "userId" to uid,
-            "username" to deposit.username,
-            "amount" to deposit.amount,
-            "paymentMethod" to deposit.paymentMethod.code,
-            "receiptId" to deposit.receiptId,
-            "fullReceipt" to deposit.fullReceipt,
-            "status" to deposit.status,
-            "createdAt" to FieldValue.serverTimestamp()
-        )
-        db.collection("deposits").document(deposit.id).set(docData).await()
+        val firestore = db ?: return
+        val uid = auth?.currentUser?.uid ?: return
+        try {
+            val docData = hashMapOf(
+                "depositId" to deposit.id,
+                "userId" to uid,
+                "username" to deposit.username,
+                "amount" to deposit.amount,
+                "paymentMethod" to deposit.paymentMethod.code,
+                "receiptId" to deposit.receiptId,
+                "fullReceipt" to deposit.fullReceipt,
+                "status" to deposit.status,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            firestore.collection("deposits").document(deposit.id).set(docData).await()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding deposit", e)
+        }
     }
 
     /**
      * Save withdrawal to Firestore `withdrawals/{withdrawId}`.
      */
     suspend fun addWithdrawal(request: WithdrawalRequest) {
-        val uid = auth.currentUser?.uid ?: return
-        val docData = hashMapOf(
-            "withdrawId" to request.id,
-            "userId" to uid,
-            "username" to request.username,
-            "amount" to request.amount,
-            "paymentMethod" to request.paymentMethod.code,
-            "targetAccount" to request.targetAccount,
-            "status" to request.status,
-            "createdAt" to FieldValue.serverTimestamp()
-        )
-        db.collection("withdrawals").document(request.id).set(docData).await()
+        val firestore = db ?: return
+        val uid = auth?.currentUser?.uid ?: return
+        try {
+            val docData = hashMapOf(
+                "withdrawId" to request.id,
+                "userId" to uid,
+                "username" to request.username,
+                "amount" to request.amount,
+                "paymentMethod" to request.paymentMethod.code,
+                "targetAccount" to request.targetAccount,
+                "status" to request.status,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            firestore.collection("withdrawals").document(request.id).set(docData).await()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding withdrawal", e)
+        }
     }
 
     /**
      * Save winning record to Firestore `winners/{winnerId}`.
      */
     suspend fun recordWin(win: WinHistoryRecord) {
-        val uid = auth.currentUser?.uid ?: "anonymous"
-        val docData = hashMapOf(
-            "winnerId" to win.id,
-            "userId" to uid,
-            "username" to win.username,
-            "phone" to win.phone,
-            "gameTime" to win.gameTime,
-            "roundIndex" to win.roundIndex,
-            "rewardBirr" to win.rewardBirr,
-            "cardNumber" to win.cardNumber,
-            "callsCount" to win.callsCount,
-            "createdAt" to FieldValue.serverTimestamp()
-        )
-        db.collection("winners").document(win.id).set(docData).await()
+        val firestore = db ?: return
+        val uid = auth?.currentUser?.uid ?: "anonymous"
+        try {
+            val docData = hashMapOf(
+                "winnerId" to win.id,
+                "userId" to uid,
+                "username" to win.username,
+                "phone" to win.phone,
+                "gameTime" to win.gameTime,
+                "roundIndex" to win.roundIndex,
+                "rewardBirr" to win.rewardBirr,
+                "cardNumber" to win.cardNumber,
+                "callsCount" to win.callsCount,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            firestore.collection("winners").document(win.id).set(docData).await()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error recording win", e)
+        }
     }
 
     /**
@@ -268,26 +337,31 @@ class FirestoreBingoRepository(
         winnerCard: Int?,
         prizePool: Int
     ) {
-        if (auth.currentUser == null) return
-        val roomData = hashMapOf<String, Any>(
-            "roomId" to roomId,
-            "slot" to slot,
-            "round" to round,
-            "status" to status,
-            "calledNumbers" to calledNumbers,
-            "prizePool" to prizePool,
-            "updatedAt" to FieldValue.serverTimestamp()
-        )
-        winnerName?.let { roomData["winnerName"] = it }
-        winnerCard?.let { roomData["winnerCardNumber"] = it }
+        val firestore = db ?: return
+        if (auth?.currentUser == null) return
+        try {
+            val roomData = hashMapOf<String, Any>(
+                "roomId" to roomId,
+                "slot" to slot,
+                "round" to round,
+                "status" to status,
+                "calledNumbers" to calledNumbers,
+                "prizePool" to prizePool,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            winnerName?.let { roomData["winnerName"] = it }
+            winnerCard?.let { roomData["winnerCardNumber"] = it }
 
-        val docRef = db.collection("game_rooms").document(roomId)
-        val doc = docRef.get().await()
-        if (!doc.exists()) {
-            roomData["createdAt"] = FieldValue.serverTimestamp()
-            docRef.set(roomData).await()
-        } else {
-            docRef.set(roomData, SetOptions.merge()).await()
+            val docRef = firestore.collection("game_rooms").document(roomId)
+            val doc = docRef.get().await()
+            if (!doc.exists()) {
+                roomData["createdAt"] = FieldValue.serverTimestamp()
+                docRef.set(roomData).await()
+            } else {
+                docRef.set(roomData, SetOptions.merge()).await()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error syncing game room state", e)
         }
     }
 
@@ -298,20 +372,26 @@ class FirestoreBingoRepository(
         roomId: String,
         onUpdate: (calledNumbers: List<Int>, status: String, winner: String?) -> Unit
     ): ListenerRegistration? {
-        if (auth.currentUser == null) return null
-        return db.collection("game_rooms").document(roomId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.w(TAG, "Error observing game room: ${error.message}")
-                    return@addSnapshotListener
+        val firestore = db ?: return null
+        if (auth?.currentUser == null) return null
+        return try {
+            firestore.collection("game_rooms").document(roomId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w(TAG, "Error observing game room: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null && snapshot.exists()) {
+                        val rawList = snapshot.get("calledNumbers") as? List<*>
+                        val called = rawList?.filterIsInstance<Number>()?.map { it.toInt() } ?: emptyList()
+                        val status = snapshot.getString("status") ?: "waiting"
+                        val winner = snapshot.getString("winnerName")
+                        onUpdate(called, status, winner)
+                    }
                 }
-                if (snapshot != null && snapshot.exists()) {
-                    val rawList = snapshot.get("calledNumbers") as? List<*>
-                    val called = rawList?.filterIsInstance<Number>()?.map { it.toInt() } ?: emptyList()
-                    val status = snapshot.getString("status") ?: "waiting"
-                    val winner = snapshot.getString("winnerName")
-                    onUpdate(called, status, winner)
-                }
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to observe game room", e)
+            null
+        }
     }
 }
